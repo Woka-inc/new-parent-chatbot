@@ -53,6 +53,6 @@ if __name__ == "__main__":
     # 사용자 입력 처리 루프
     for user_input in iter(lambda: input("질문을 입력하세요 ('exit'를 입력하면 종료됩니다): "), "exit"):
         response = get_npcb_response(chain, user_input)
-        print(">> ChatBot: ", response)
+        print(">> ChatBot: ", response, "\n\n")
 
     print("New Parent ChatBot을 종료합니다.")
