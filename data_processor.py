@@ -1,5 +1,6 @@
 import json
 from bs4 import BeautifulSoup
+from langchain.docstore.document import Document
 
 # HTML 태그를 제거하고 순수 텍스트만 남기기 위한 함수
 def clean_html(html_content):
@@ -36,3 +37,17 @@ def process_healthychildren_articles(input_path, output_path):
         
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(cleaned_data, f, ensure_ascii=False, indent=4)
+
+
+def json_loader(path):
+    # JSON 파일 로드
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # JSON 데이터에서 문서 추출
+    documents = [
+        Document(page_content=doc['content'], metadata=doc['metadata'])
+        for doc in data
+    ]
+
+    return documents
