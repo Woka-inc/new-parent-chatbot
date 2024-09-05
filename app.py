@@ -2,8 +2,6 @@ from data_processor import process_healthychildren_articles, json_loader
 from crawler import scrape_conditions
 from model import create_retriever, create_chain, get_npcb_response
 
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import PromptTemplate
 
 
