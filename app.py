@@ -1,31 +1,37 @@
-from data_processor import process_healthychildren_articles, json_loader
-from crawler import scrape_conditions
-from model import create_retriever, create_chain, get_npcb_response
+from data_loader.json_loader import JsonLoader
+from data_loader.datasaver import JsonSaver
+from crawler.healthy_children import HealthyChildrenOrg
+from preprocessor.structured_data import JsonToLangChainDoc
+from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
+from model.langchain.chain import RagHistoryChain
 
 from langchain_core.prompts import PromptTemplate
 
-
-condition_url = 'https://www.healthychildren.org/English/health-issues/conditions/'
-base_url = 'https://www.healthychildren.org'
-original_article_path = './res/scraped_condition_articles.json'
 cleaned_article_path = './res/articles.json'
+# cleaned_article_path = './res/test_articles.json'
 
 if __name__ == "__main__":
     # 데이터 크롤링 여부 확인
-    do_crawl = input("기사자료를 새로 크롤링 하시겠습니까? y/n: ")
-    print("New Parent ChatBot을 로딩 중입니다.")
+    do_crawl = input("자료를 업데이트 하시겠습니까? y/n: ")
+
     if do_crawl == 'y':
-        # 데이터 수집, 전처리
-        scrape_conditions(base_url, condition_url, path_to_save=original_article_path)
-        process_healthychildren_articles(original_article_path, cleaned_article_path)
+        print("참고자료를 업데이트 중입니다.")
+        # 데이터 수집, 저장
+        healthychildren = HealthyChildrenOrg(cleaned_article_path)
+        crawled_data = healthychildren.get_condition_articles_list()
+        JsonSaver(cleaned_article_path, crawled_data).save()
     
-    # 참고자료(JSON) Document list로 로드
-    documents = json_loader(cleaned_article_path)
+    # JSON 데이터를 로드하고 LangChain Document 객체로 가져오기
+    json_loader = JsonLoader(cleaned_article_path)
+    json_data = json_loader.load()
+    documents = JsonToLangChainDoc(json_data).get_langchain_doc()
 
-    # 임베딩, 검색기 생성
-    retriever = create_retriever(documents)
+    # print(documents[0])
 
-    # system 프롬프트 작성
+    # 임베딩 후 검색기 생성
+    embedding = RetrieverWithOpenAiEmbeddings(documents)
+    retriever = embedding.retriever()
+
     prompt = PromptTemplate.from_template(
         """You are an expert in infant and toddler medical knowledge. 
         You are here to guide new parents on how to handle situations like emergencies with information from the context.
@@ -45,12 +51,12 @@ if __name__ == "__main__":
         #Answer:"""
     )
 
-    # chain 생성
-    chain = create_chain(prompt, retriever)
+    # 체인 생성
+    chain = RagHistoryChain(prompt, retriever)
 
     # 사용자 입력 처리 루프
     for user_input in iter(lambda: input("질문을 입력하세요 ('exit'를 입력하면 종료됩니다): "), "exit"):
-        response = get_npcb_response(chain, user_input)
+        response = chain.get_response(user_input)
         print(">> ChatBot: ", response, "\n\n")
-
+    
     print("New Parent ChatBot을 종료합니다.")
