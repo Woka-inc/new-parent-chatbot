@@ -5,6 +5,7 @@ from preprocessor.structured_data import JsonToLangChainDoc
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
 
+
 from langchain_core.prompts import PromptTemplate
 
 cleaned_article_path = './res/articles.json'
