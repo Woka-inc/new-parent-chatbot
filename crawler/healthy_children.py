@@ -24,7 +24,7 @@ class HealthyChildrenOrg:
             print("no condition links found")
 
         # 테스트용 코드(시간단축 목적)
-        condition_links = condition_links[:1]
+        # condition_links = condition_links[:1]
 
         # 2. 각 condition 페이지에서 기사들 링크 추출
         for condition_link in tqdm(condition_links):
