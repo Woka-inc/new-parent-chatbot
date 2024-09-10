@@ -4,7 +4,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-
 class RagHistoryChain:
     def __init__(self, prompt, retriever, model_name="gpt-4o"):
         llm = ChatOpenAI(model_name=model_name)
@@ -20,7 +19,7 @@ class RagHistoryChain:
         )
         self.session_storage = {}
     
-    def get_session_history(self,session_id):
+    def get_session_history(self,session_id=1):
         print(f"[대화 세션ID]: {session_id}")
         if session_id not in self.session_storage:  # 세션 ID가 session_storage에 없는 경우
             # 새로운 ChatMessageHistory 객체를 생성하여 session_storage에 저장
