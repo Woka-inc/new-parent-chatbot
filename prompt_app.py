@@ -5,13 +5,20 @@ from preprocessor.structured_data import JsonToLangChainDoc
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
 
-
+from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
+import os
 
 cleaned_article_path = './res/articles.json'
-# cleaned_article_path = './res/test_articles.json'
 
 if __name__ == "__main__":
+
+    # OpenAI API KEY 로드
+    load_dotenv()
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    if not OPENAI_API_KEY:
+        OPENAI_API_KEY = input("OpenAI API Key를 입력하세요: ")
+
     # 데이터 크롤링 여부 확인
     do_crawl = input("자료를 업데이트 하시겠습니까? y/n: ")
 
