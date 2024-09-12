@@ -61,6 +61,7 @@ def ask_api_key():
 
 if 'OPENAI_API_KEY' not in st.session_state:
     if openai.api_key:
+        print(">> 세션에 OpenAI API에 저장되어있던 키 넣습니다요~~")
         st.session_state['OPENAI_API_KEY'] = openai.api_key
     else:
         try:
@@ -68,7 +69,7 @@ if 'OPENAI_API_KEY' not in st.session_state:
             OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
             if OPENAI_API_KEY:
                 st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
-                print(f">> 환경변수에서 API KEY 로드해서, 세션에 저장함")
+                print(f">> 환경변수에서 로드해서, 세션에 저장함")
             else:
                 raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
         except ValueError as e:
@@ -76,7 +77,9 @@ if 'OPENAI_API_KEY' not in st.session_state:
             ask_api_key()
 
 def main():
+    print(">>> ----------- MAIN 함수 ----------- <<<")
     api_key = st.session_state['OPENAI_API_KEY']
+    openai.api_key = api_key    # OpenAI API에 키 저장
     st.markdown("<h1 style='text-align: center;'>New Parent ChatBot</h1>", unsafe_allow_html=True)
     st.markdown("<h5 style='text-align: center;'>초보 부모들을 위한 의료지식 챗봇</h5>", unsafe_allow_html=True)
 
