@@ -5,8 +5,8 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 class RagHistoryChain:
-    def __init__(self, prompt, retriever, model_name="gpt-4o"):
-        llm = ChatOpenAI(model_name=model_name)
+    def __init__(self, prompt, retriever, openai_api_key, model_name="gpt-4o"):
+        llm = ChatOpenAI(model_name=model_name, api_key=openai_api_key)
         self.chain = (
             {
             "context": itemgetter("question") | retriever,
