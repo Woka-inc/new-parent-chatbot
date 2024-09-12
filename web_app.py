@@ -1,6 +1,7 @@
 import streamlit as st
 from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
+import openai
 
 from data_loader.json_loader import JsonLoader
 from data_loader.datasaver import JsonSaver
@@ -54,22 +55,25 @@ def ask_api_key():
     st.write("\'확인\'버튼을 누른 후 잠시만 기다려주세요.")
     key = st.text_input("sk-...")
     if st.button("확인"):
-        print(">> 키 입력됨:", key)
+        print(">> 사용자로부터 키 입력됨")
         st.session_state['OPENAI_API_KEY'] = key
         st.rerun()
 
 if 'OPENAI_API_KEY' not in st.session_state:
-    try:
-        load_dotenv()
-        OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-        if OPENAI_API_KEY:
-            st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
-            print(f">> 환경변수에서 로드해서, 세션에 저장함: {st.session_state['OPENAI_API_KEY']}")
-        else:
-            raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
-    except ValueError as e:
-        print(str(e))
-        ask_api_key()
+    if openai.api_key:
+        st.session_state['OPENAI_API_KEY'] = openai.api_key
+    else:
+        try:
+            load_dotenv()
+            OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+            if OPENAI_API_KEY:
+                st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
+                print(f">> 환경변수에서 API KEY 로드해서, 세션에 저장함")
+            else:
+                raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
+        except ValueError as e:
+            print(str(e))
+            ask_api_key()
 
 def main():
     api_key = st.session_state['OPENAI_API_KEY']
