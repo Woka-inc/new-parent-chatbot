@@ -9,7 +9,7 @@ from crawler.healthy_children import HealthyChildrenOrg
 from preprocessor.structured_data import JsonToLangChainDoc
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
-from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child
+from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
 
@@ -112,6 +112,17 @@ def submit_symptoms(child_name, birth_date, history, bot_status):
         st.session_state['submitted_symptom'] = True
         st.rerun()
 
+@st.dialog("수정할 아이의 정보를 입력해주세요.")
+def question_update_info():
+    if 'name_to_update' in st.session_state:
+        st.subheader(f"{st.session_state['name_to_update']}의 정보를 수정합니다.")
+        st.session_state['update_needed'] = True
+
+    st.session_state['child_name'] = st.text_input("아이의 새로운 이름을 입력하세요.")
+    st.session_state['birth_date'] = st.text_input("아이의 새로운 생년월일을 입력하세요 (예: 2020-01-01)")
+    if st.button("수정"):
+        st.rerun()
+
 @st.dialog("아이의 정보를 입력해주세요.")
 def question_child_info():
     st.markdown("<span style='font-weight:bold;'>아이의 이름을 입력하세요.</span>", unsafe_allow_html=True)
@@ -210,18 +221,31 @@ def main():
     if st.sidebar.button("처음부터 시작하기"):
         st.session_state.clear()
         st.rerun()
+    
+    # 사이드바: 데이터 관리 섹션
     st.sidebar.subheader("데이터 관리")
     # 사이드바: 데이터베이스의 아이 기록 삭제
     if st.sidebar.button("아이 정보 삭제"):
         get_childname_to('delete')
     if 'name_to_delete' in st.session_state:
         name_to_del = st.session_state['name_to_delete']
-        delete_child(st.session_state['name_to_delete'])
+        delete_child(name_to_del)
         st.session_state.pop('name_to_delete', None)
         if st.session_state['child_name'] == name_to_del:
             # 직전에 질문한 아이의 정보를 삭제한 거라면 세션 새로 시작
             st.session_state.clear()
             st.rerun()
+    # 사이드바: 데이터베이스의 아이 정보 수정
+    if st.sidebar.button("아이 정보 수정"):
+        get_childname_to('update')
+    if 'name_to_update' in st.session_state:
+        name_to_update = st.session_state['name_to_update']
+        if 'update_needed' in st.session_state:
+            update_child(name_to_update, st.session_state['child_name'], st.session_state['birth_date'])
+            st.session_state.pop('update_needed', None)
+            st.session_state.pop('name_to_update', None)
+        else:
+            question_update_info()
 
     # RAG 자료 로드
     json_loader = JsonLoader(cleaned_article_path)
