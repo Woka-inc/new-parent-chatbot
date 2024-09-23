@@ -22,9 +22,10 @@ def update_articles(bot_status):
     JsonSaver(cleaned_article_path, crawled_data).save()
     bot_status.update(label="정보를 업데이트 했습니다.", state="complete")
 
-def initialize_chain(documents, openai_api_key):
+@st.cache_resource
+def initialize_chain(_documents, openai_api_key):
     # Embeddings
-    embedding = RetrieverWithOpenAiEmbeddings(documents, openai_api_key=openai_api_key)
+    embedding = RetrieverWithOpenAiEmbeddings(_documents, openai_api_key=openai_api_key)
     # Vector Store
     retriever = embedding.retriever()
 
@@ -181,6 +182,7 @@ def main():
     st.sidebar.write('---')
     option = st.sidebar.selectbox('참고 자료 선택', ('기존 자료 사용', '업데이트(40분 소요)'))
     if option == '업데이트(40분 소요)':
+        st.cache_resource.clear()   # 캐싱된 기존 체인 삭제
         update_articles(bot_status)
     st.sidebar.write('---')
     # 사이드바: 세션기록 삭제
