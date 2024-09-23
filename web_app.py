@@ -9,7 +9,7 @@ from crawler.healthy_children import HealthyChildrenOrg
 from preprocessor.structured_data import JsonToLangChainDoc
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
-from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children
+from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child
 
 import os
 
@@ -138,6 +138,27 @@ def question_child_info():
                 if st.button("확인"):
                     st.rerun()
 
+@st.dialog("등록된 아이의 정보 수정/삭제하기")
+def get_childname_to(operation):
+    st.write("아이의 등록정보를 수정/삭제하면,")
+    st.write("저장되어있던 증상 기록 정보도 함께 수정/삭제됩니다.")
+    all_children = fetch_all_children()
+    names = []
+    births = []
+    for record in all_children:
+        names.append(record[1])
+        births.append(str(record[2]))
+    selected = st.radio(
+        label="데이터베이스에서 수정/삭제할 아이의 이름을 선택하세요.",
+        options=names,
+        captions=births,
+        label_visibility='collapsed',
+        index=None
+    )
+    if st.button(operation):
+        st.session_state["name_to_"+operation] = selected
+        st.rerun()
+
 @st.dialog("OpenAI API Key")
 def ask_api_key():
     st.write(f"OpenAI API Key가 필요합니다.")
@@ -189,6 +210,18 @@ def main():
     if st.sidebar.button("처음부터 시작하기"):
         st.session_state.clear()
         st.rerun()
+    st.sidebar.subheader("데이터 관리")
+    # 사이드바: 데이터베이스의 아이 기록 삭제
+    if st.sidebar.button("아이 정보 삭제"):
+        get_childname_to('delete')
+    if 'name_to_delete' in st.session_state:
+        name_to_del = st.session_state['name_to_delete']
+        delete_child(st.session_state['name_to_delete'])
+        st.session_state.pop('name_to_delete', None)
+        if st.session_state['child_name'] == name_to_del:
+            # 직전에 질문한 아이의 정보를 삭제한 거라면 세션 새로 시작
+            st.session_state.clear()
+            st.rerun()
 
     # RAG 자료 로드
     json_loader = JsonLoader(cleaned_article_path)
