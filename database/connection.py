@@ -1,5 +1,5 @@
 import pymysql
-from database.config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
+from database.config import *
 
 def create_connection():
     connection = None

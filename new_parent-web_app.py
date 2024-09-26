@@ -12,6 +12,7 @@ from model.langchain.chain import RagHistoryChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
+import re
 
 def update_references(bot_status, references):
     """
@@ -213,6 +214,43 @@ if 'OPENAI_API_KEY' not in st.session_state:
             print(str(e))
             ask_api_key()
 
+@st.dialog("Database Password")
+def ask_database_pw():
+    st.write(f"Database 비밀번호가 필요합니다.")
+    st.write("\'확인\'버튼을 누른 후 잠시만 기다려주세요.")
+    pw = st.text_input("root 비밀번호")
+    if st.button("확인"):
+        print(">> 사용자로부터 키 입력됨")
+        st.session_state['DB_PASSWORD'] = pw
+        with open("./database/config.py", "a") as config_file:
+            config_file.write(f"\nDB_PASSWORD = '{pw}'")
+        st.rerun()
+
+if 'DB_PASSWORD' not in st.session_state:
+    with open("./database/config.py", "r") as config_file:
+        result = config_file.read()
+        pw = re.search(r'DB_PASSWORD = (.+)', result)
+        if pw == None:
+            ask_database_pw()
+        else:
+            st.session_state['DB_PASSWORD'] = pw.group(1)
+
+    # if openai.api_key:
+    #     print(">> 세션에 OpenAI API에 저장되어있던 키 넣습니다요~~")
+    #     st.session_state['OPENAI_API_KEY'] = openai.api_key
+    # else:
+    #     try:
+    #         load_dotenv()
+    #         OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    #         if OPENAI_API_KEY:
+    #             st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
+    #             print(f">> 환경변수에서 로드해서, 세션에 저장함")
+    #         else:
+    #             raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
+    #     except ValueError as e:
+    #         print(str(e))
+    #         ask_api_key()
+
 def main():
     child_name, birth_date, child_in_db = None, None, None
     references = ['asan', 'samsung', 'severance']
@@ -273,7 +311,9 @@ def main():
     need_download = False
     for path in paths:
         if os.path.exists(path): continue
-        else: need_download = True
+        else: 
+            print(">>> 근거자료 파일 없음 다운로드 필요")
+            need_download = True
     if need_download:
         update_references(bot_status, references)
     for path in paths:
