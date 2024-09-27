@@ -98,6 +98,14 @@ def create_query_with_symptoms(birth, symptom, description, history):
     Please tell me what I can do immediately.
     Visiting a hospital is not an option right now.
     If you made judgement based on the recorded past symptoms, tell me that you did so.
+
+    Answer in the following format (fill in the [] with your answer):
+    아이는 만 [age of the child]세 입니다.
+    입력하신 증상으로는 다음 질환을 의심해볼 수 있습니다: [conditions available].   
+    [explanation about the condition]
+    [reason why the condition occurs]
+    [Immediate first aid the user can perform without going to the hospital]
+    [type of hospital the user should visit with his or her child]
     """
     return symptom_input, query
 
