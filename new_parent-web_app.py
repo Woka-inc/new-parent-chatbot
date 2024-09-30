@@ -5,21 +5,38 @@ import openai
 
 from data_loader.json_loader import JsonLoader
 from data_loader.datasaver import JsonSaver
-from crawler.healthy_children import HealthyChildrenOrg
+from crawler.korean_hospitals import SamsungHospital, AsanMedicalCenter, SeveranceHospital
 from preprocessor.structured_data import JsonToLangChainDoc
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
+import re
 
-cleaned_article_path = './res/articles.json'
+def update_references(bot_status, references):
+    """
+    참고 자료 다운로드: 삼성, 아산, 세브란스 병원의 질환 관련 컨텐츠를 Json으로 저장
+    """
+    print(">>> 3병원 자료 업데이트 시작함~")
+    path_to_save = './res/'
+    datas = []
+    bot_status.update(label="정보를 업데이트 하고 있습니다.", state="running")
+    
+    # 데이터 크롤링 (references 리스트 순서대로)
+    crawler_asan = AsanMedicalCenter()
+    datas.append(crawler_asan.get_crawled_data())
+    cralwer_samsung = SamsungHospital()
+    datas.append(cralwer_samsung.get_crawled_data())
+    cralwer_severance = SeveranceHospital()
+    datas.append(cralwer_severance.get_crawled_data())
 
-def update_articles(bot_status):
-    bot_status.update(label="정보를 업데이트 하고 있습니다. (최대 40분 소요)", state="running")
-    crawler = HealthyChildrenOrg(cleaned_article_path)
-    crawled_data = crawler.get_condition_articles_list()
-    JsonSaver(cleaned_article_path, crawled_data).save()
+    # json으로 저장
+    jsonsaver = JsonSaver()
+    for i in range(len(references)):
+        path = path_to_save + references[i] + '.json'
+        jsonsaver.save(path, datas[i])
+
     bot_status.update(label="정보를 업데이트 했습니다.", state="complete")
 
 @st.cache_resource
@@ -197,8 +214,46 @@ if 'OPENAI_API_KEY' not in st.session_state:
             print(str(e))
             ask_api_key()
 
+@st.dialog("Database Password")
+def ask_database_pw():
+    st.write(f"Database 비밀번호가 필요합니다.")
+    st.write("\'확인\'버튼을 누른 후 잠시만 기다려주세요.")
+    pw = st.text_input("root 비밀번호")
+    if st.button("확인"):
+        print(">> 사용자로부터 키 입력됨")
+        st.session_state['DB_PASSWORD'] = pw
+        with open("./database/config.py", "a") as config_file:
+            config_file.write(f"\nDB_PASSWORD = '{pw}'")
+        st.rerun()
+
+if 'DB_PASSWORD' not in st.session_state:
+    with open("./database/config.py", "r") as config_file:
+        result = config_file.read()
+        pw = re.search(r'DB_PASSWORD = (.+)', result)
+        if pw == None:
+            ask_database_pw()
+        else:
+            st.session_state['DB_PASSWORD'] = pw.group(1)
+
+    # if openai.api_key:
+    #     print(">> 세션에 OpenAI API에 저장되어있던 키 넣습니다요~~")
+    #     st.session_state['OPENAI_API_KEY'] = openai.api_key
+    # else:
+    #     try:
+    #         load_dotenv()
+    #         OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    #         if OPENAI_API_KEY:
+    #             st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
+    #             print(f">> 환경변수에서 로드해서, 세션에 저장함")
+    #         else:
+    #             raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
+    #     except ValueError as e:
+    #         print(str(e))
+    #         ask_api_key()
+
 def main():
     child_name, birth_date, child_in_db = None, None, None
+    references = ['asan', 'samsung', 'severance']
 
     print(">>> ----------- MAIN 함수 ----------- <<<")
     api_key = st.session_state['OPENAI_API_KEY']
@@ -206,25 +261,25 @@ def main():
     st.markdown("<h1 style='text-align: center;'>New Parent ChatBot</h1>", unsafe_allow_html=True)
     st.markdown("<h5 style='text-align: center;'>초보 부모들을 위한 의료지식 챗봇</h5>", unsafe_allow_html=True)
 
-    # 사이드바 설정
+    # 사이드바 설정 ------------------------------------------
     st.sidebar.title("설정")
 
-    # 사이드바: 참고자료 업데이트
+    # 참고자료 업데이트
     bot_status = st.sidebar.status(label="ChatBot Status", state="complete")
     st.sidebar.write('---')
-    option = st.sidebar.selectbox('참고 자료 선택', ('기존 자료 사용', '업데이트(40분 소요)'))
-    if option == '업데이트(40분 소요)':
+    option = st.sidebar.selectbox('참고 자료', ('기존 자료 사용', '업데이트'))
+    if option == '업데이트':
         st.cache_resource.clear()   # 캐싱된 기존 체인 삭제
-        update_articles(bot_status)
+        update_references(bot_status, references)
     st.sidebar.write('---')
-    # 사이드바: 세션기록 삭제
+    # 세션기록 삭제
     if st.sidebar.button("처음부터 시작하기"):
         st.session_state.clear()
         st.rerun()
     
-    # 사이드바: 데이터 관리 섹션
+    # 데이터 관리 섹션
     st.sidebar.subheader("데이터 관리")
-    # 사이드바: 데이터베이스의 아이 기록 삭제
+    # 데이터베이스의 아이 기록 삭제
     if st.sidebar.button("아이 정보 삭제"):
         get_childname_to('delete')
     if 'name_to_delete' in st.session_state:
@@ -235,7 +290,7 @@ def main():
             # 직전에 질문한 아이의 정보를 삭제한 거라면 세션 새로 시작
             st.session_state.clear()
             st.rerun()
-    # 사이드바: 데이터베이스의 아이 정보 수정
+    # 데이터베이스의 아이 정보 수정
     if st.sidebar.button("아이 정보 수정"):
         get_childname_to('update')
     if 'name_to_update' in st.session_state:
@@ -246,13 +301,26 @@ def main():
             st.session_state.pop('name_to_update', None)
         else:
             question_update_info()
+    
+    # RAG reference 자료 로드 ------------------------------------------
+    resource_path = './res/'
+    documents = []
+    paths = [(resource_path + hospital + '.json') for hospital in references]
+    
+    # 다운받은 reference 자료가 없는 경우 자동 다운로드
+    need_download = False
+    for path in paths:
+        if os.path.exists(path): continue
+        else: 
+            print(">>> 근거자료 파일 없음 다운로드 필요")
+            need_download = True
+    if need_download:
+        update_references(bot_status, references)
+    for path in paths:
+        json_data = JsonLoader(path).load()
+        documents += JsonToLangChainDoc(json_data).get_langchain_doc()
 
-    # RAG 자료 로드
-    json_loader = JsonLoader(cleaned_article_path)
-    json_data = json_loader.load()
-    documents = JsonToLangChainDoc(json_data).get_langchain_doc()
-
-    # chain 생성 후 세션에 저장해 사용
+    # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
     if 'chain' not in st.session_state:
         st.session_state['chain'] = initialize_chain(documents, api_key)

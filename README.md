@@ -37,9 +37,10 @@ FOREIGN KEY (child_name) REFERENCES child(name) ON UPDATE CASCADE
 
 <h3>MySQL root 비밀번호 등록</h3>
 
-./database/config.py 파일에서 line[10]의 `DB_PASSWORD`에 자신의 root 비밀번호 입력
+* 프로그램을 실행한 직후, 터미널에 DB 비밀번호를 입력해야 진행됨.
+* 한 번 입력한 비밀번호는 database/config.py 파일에 보관
 
-
+<br/><hr/>
 * Embedding Model: langchain_openai.OpenAIEmbeddings
 * vectorstore: FAISS
 * llm: langchain_openai.ChatOpenAI
