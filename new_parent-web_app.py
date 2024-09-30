@@ -12,7 +12,7 @@ from model.langchain.chain import RagHistoryChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
-import re
+from datetime import datetime
 
 def update_references(bot_status, references):
     """
@@ -41,17 +41,24 @@ def update_references(bot_status, references):
 
 @st.cache_resource
 def initialize_chain(_documents, openai_api_key):
+    print(">>> chain initializing")
     # Embeddings
     embedding = RetrieverWithOpenAiEmbeddings(_documents, openai_api_key=openai_api_key)
     # Vector Store
-    retriever = embedding.retriever()
+    retriever = embedding.multiquery_retriever
 
     prompt = PromptTemplate.from_template(
-                """You are an expert in infant and toddler medical knowledge. 
-                You are here to guide new parents on how to handle situations like emergencies with information from the context.
-                You need to ask questions to the user if you need.
+                """
+                You are a professional with medical knowledge about infants and toddlers, based on the context below.
+                You must always use the information from the provided context to guide new parents.
+                When answering questions, always refer to the information provided in the context below.
+                Your answer should be based on this context and should not include any information that contradicts it.
+                If you do not find the necessary information in the context, ask the user for more details or clarification.
                 You should answer in Korean.
-                Your answer should be 1~5 sentences long unless the user ask you for longer answer.
+
+                If a user inputs certain symptoms, identify possible illnesses related to those symptoms, 
+                provide a description of the illnesses, and explain their causes and treatments, 
+                including first aid, based on the following context.
                 
                 # Previous Chat History:
                 {chat_history}
@@ -64,8 +71,7 @@ def initialize_chain(_documents, openai_api_key):
 
                 #Answer:"""
             )
-    chain = RagHistoryChain(prompt, retriever, openai_api_key=openai_api_key, model_name='gpt-3.5-turbo')
-    
+    chain = RagHistoryChain(prompt, retriever, openai_api_key=openai_api_key, model_name='gpt-4o')
     return chain
 
 def get_child_info(name):
@@ -79,7 +85,7 @@ def get_child_info(name):
 def create_query_with_symptoms(birth, symptom, description, history):
     # 챗에서 사용자의 말풍선으로 표시될 사용자의 증상 입력 내용
     symptom_input = f"""
-    - 아이의 생년월일: {birth}
+    - 아이의 만 나이: {datetime.now().year - birth.year}세
     - 증상: {symptom}
     - 증상에 대한 설명: {description}
     """
@@ -87,7 +93,7 @@ def create_query_with_symptoms(birth, symptom, description, history):
     # 실제 모델에게 전달될, 과거 증상 내역을 포함한 사용자의 증상 입력 내용
     query = f"""
     I observe the symptom below from my child.
-    - birth of this child: {birth}
+    - age: {datetime.now().year-birth.year}세
     - observed symptoms: {symptom}
     - descriptions on observed symptoms: {description}
 
@@ -97,6 +103,20 @@ def create_query_with_symptoms(birth, symptom, description, history):
     Please tell me what I can do immediately.
     Visiting a hospital is not an option right now.
     If you made judgement based on the recorded past symptoms, tell me that you did so.
+
+    You must always use the information from the provided context to guide new parents.
+    When answering questions, always refer to the information provided in the context below.
+    Your answer should be based on this context and should not include any information that contradicts it.
+    If you do not find the necessary information in the context, ask the user for more details or clarification.
+
+    Answer in the following format (fill in the [] with your answer):
+    말씀하신 증상으로는 **[conditions available]**을 의심해볼 수 있습니다.
+    [explanations about the condition]
+    [reasons why the condition occurs]
+    * 응급처치: 
+    [Immediate first aid the user can perform without going to the hospital referred from the provided context]
+    * 방문할 병원:
+    [type of hospital the user should visit with his or her child]
     """
     return symptom_input, query
 
@@ -213,43 +233,6 @@ if 'OPENAI_API_KEY' not in st.session_state:
         except ValueError as e:
             print(str(e))
             ask_api_key()
-
-@st.dialog("Database Password")
-def ask_database_pw():
-    st.write(f"Database 비밀번호가 필요합니다.")
-    st.write("\'확인\'버튼을 누른 후 잠시만 기다려주세요.")
-    pw = st.text_input("root 비밀번호")
-    if st.button("확인"):
-        print(">> 사용자로부터 키 입력됨")
-        st.session_state['DB_PASSWORD'] = pw
-        with open("./database/config.py", "a") as config_file:
-            config_file.write(f"\nDB_PASSWORD = '{pw}'")
-        st.rerun()
-
-if 'DB_PASSWORD' not in st.session_state:
-    with open("./database/config.py", "r") as config_file:
-        result = config_file.read()
-        pw = re.search(r'DB_PASSWORD = (.+)', result)
-        if pw == None:
-            ask_database_pw()
-        else:
-            st.session_state['DB_PASSWORD'] = pw.group(1)
-
-    # if openai.api_key:
-    #     print(">> 세션에 OpenAI API에 저장되어있던 키 넣습니다요~~")
-    #     st.session_state['OPENAI_API_KEY'] = openai.api_key
-    # else:
-    #     try:
-    #         load_dotenv()
-    #         OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-    #         if OPENAI_API_KEY:
-    #             st.session_state['OPENAI_API_KEY'] = OPENAI_API_KEY
-    #             print(f">> 환경변수에서 로드해서, 세션에 저장함")
-    #         else:
-    #             raise ValueError(">> 환경변수에 OPENAI_API_KEY 없음. 사용자에게 요청")
-    #     except ValueError as e:
-    #         print(str(e))
-    #         ask_api_key()
 
 def main():
     child_name, birth_date, child_in_db = None, None, None
