@@ -7,4 +7,4 @@ class BaseCrawler:
     
     @abstractmethod
     def get_contents_list(self):
-        pass
+        raise NotImplementedError("Subclasses should implement this method.")

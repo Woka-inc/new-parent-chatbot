@@ -53,8 +53,8 @@ def fetch_all_children():
     try:
         cursor.execute(query)
         results = cursor.fetchall()
-        for row in results:
-            print(f">> fetched info: {row} (database.operations.fetch_all_children)")
+        # for row in results:
+        #     print(f">> fetched info: {row} (database.operations.fetch_all_children)")
     except pymysql.MySQLError as e:
         print(f"Failed to fetch records from MySQL table {e} (database.operations.fetch_all_children)")
     finally:
