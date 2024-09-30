@@ -41,18 +41,24 @@ def update_references(bot_status, references):
 
 @st.cache_resource
 def initialize_chain(_documents, openai_api_key):
+    print(">>> chain initializing")
     # Embeddings
     embedding = RetrieverWithOpenAiEmbeddings(_documents, openai_api_key=openai_api_key)
     # Vector Store
-    retriever = embedding.retriever()
+    retriever = embedding.multiquery_retriever
 
     prompt = PromptTemplate.from_template(
-                """You are an expert in infant and toddler medical knowledge. 
-                You are here to guide new parents on how to handle situations like emergencies with information from the context.
-                You need to ask questions to the user if you need.
+                """
+                You are a professional with medical knowledge about infants and toddlers, based on the context below.
+                You must always use the information from the provided context to guide new parents.
+                When answering questions, always refer to the information provided in the context below.
+                Your answer should be based on this context and should not include any information that contradicts it.
+                If you do not find the necessary information in the context, ask the user for more details or clarification.
                 You should answer in Korean.
-                Your answer should be 1~5 sentences long unless the user asks you for a longer answer.
-                Consider her or his age.
+
+                If a user inputs certain symptoms, identify possible illnesses related to those symptoms, 
+                provide a description of the illnesses, and explain their causes and treatments, 
+                including first aid, based on the following context.
                 
                 # Previous Chat History:
                 {chat_history}
@@ -65,8 +71,7 @@ def initialize_chain(_documents, openai_api_key):
 
                 #Answer:"""
             )
-    chain = RagHistoryChain(prompt, retriever, openai_api_key=openai_api_key, model_name='gpt-3.5-turbo')
-    
+    chain = RagHistoryChain(prompt, retriever, openai_api_key=openai_api_key, model_name='gpt-4o')
     return chain
 
 def get_child_info(name):
@@ -99,12 +104,18 @@ def create_query_with_symptoms(birth, symptom, description, history):
     Visiting a hospital is not an option right now.
     If you made judgement based on the recorded past symptoms, tell me that you did so.
 
+    You must always use the information from the provided context to guide new parents.
+    When answering questions, always refer to the information provided in the context below.
+    Your answer should be based on this context and should not include any information that contradicts it.
+    If you do not find the necessary information in the context, ask the user for more details or clarification.
+
     Answer in the following format (fill in the [] with your answer):
-    아이는 만 [age of the child]세 입니다.
-    입력하신 증상으로는 다음 질환을 의심해볼 수 있습니다: [conditions available].   
-    [explanation about the condition]
-    [reason why the condition occurs]
-    [Immediate first aid the user can perform without going to the hospital]
+    말씀하신 증상으로는 **[conditions available]**을 의심해볼 수 있습니다.
+    [explanations about the condition]
+    [reasons why the condition occurs]
+    * 응급처치: 
+    [Immediate first aid the user can perform without going to the hospital referred from the provided context]
+    * 방문할 병원:
     [type of hospital the user should visit with his or her child]
     """
     return symptom_input, query
