@@ -1,0 +1,45 @@
+name: GPT Code Reviewer
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout project repository
+        uses: actions/checkout@v3
+
+      - name: Checkout gpt-code-reviewer repository
+        uses: actions/checkout@v3
+        with:
+          repository: Woka-inc/gpt-code-reviewer # gpt-code-reviewer 리포지토리
+          branch: main
+          path: gpt-code-reviewer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./gpt-code-reviewer # gpt-code-reviewer 경로
+
+      - name: Run GPT code review
+        run: node reviewer.js
+        working-directory: ./gpt-code-reviewer # gpt-code-reviewer 경로
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
