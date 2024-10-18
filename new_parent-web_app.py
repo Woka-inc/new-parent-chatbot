@@ -6,7 +6,7 @@ import openai
 from data_loader.json_loader import JsonLoader
 from data_loader.datasaver import JsonSaver
 from crawler.korean_hospitals import SamsungHospital, AsanMedicalCenter, SeveranceHospital
-from preprocessor.structured_data import JsonToLangChainDoc
+from preprocessor.structured_data import json_to_langchain_doclist
 from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
 from model.langchain.chain import RagHistoryChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
@@ -301,7 +301,7 @@ def main():
         update_references(bot_status, references)
     for path in paths:
         json_data = JsonLoader(path).load()
-        documents += JsonToLangChainDoc(json_data).get_langchain_doc()
+        documents += json_to_langchain_doclist(json_data)
 
     # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
