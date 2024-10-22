@@ -22,16 +22,16 @@ def add_child_to_db(child_name, birth):
         cursor.close()
         close_connection(connection)
 
-def save_symptom_to_db(child_name, symptom, description=""):
+def save_symptom_to_db(child_name, symptom):
     # MySQL DB에 증상 데이터 저장
     connection = create_connection()
     cursor = connection.cursor()
     
     query = """
-    INSERT INTO symptom_reports (child_name, symptom, description) 
+    INSERT INTO symptom_reports (child_name, symptom) 
     VALUES (%s, %s, %s)
     """
-    values = (child_name, symptom, description)
+    values = (child_name, symptom)
     
     try:
         cursor.execute(query, values)
