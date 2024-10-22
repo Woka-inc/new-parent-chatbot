@@ -19,7 +19,7 @@ jobs:
       - name: Checkout gpt-code-reviewer repository
         uses: actions/checkout@v3
         with:
-          repository: NaA-hwang/gpt-code-reviewer # gpt-code-reviewer 리포지토리
+          repository: Woka-inc/gpt-code-reviewer # gpt-code-reviewer 리포지토리
           branch: main
           path: gpt-code-reviewer
 
