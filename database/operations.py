@@ -29,7 +29,7 @@ def save_symptom_to_db(child_name, symptom):
     
     query = """
     INSERT INTO symptom_reports (child_name, symptom) 
-    VALUES (%s, %s, %s)
+    VALUES (%s, %s)
     """
     values = (child_name, symptom)
     
