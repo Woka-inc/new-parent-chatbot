@@ -1,6 +1,7 @@
 from operator import itemgetter
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
@@ -26,7 +27,7 @@ class RagHistoryChain:
             self.session_storage[session_id] = ChatMessageHistory()
         return self.session_storage[session_id]  # 해당 세션 ID에 대한 세션 기록 반환
     
-    def get_response(self, question, session_id=1):
+    def get_response(self, question, ragged_docs, session_id=1):
         # 대화를 기록하는 RAG체인 생성
         rag_with_history = RunnableWithMessageHistory(
             self.chain,
@@ -41,3 +42,19 @@ class RagHistoryChain:
             config={"configurable": {"session_id": session_id}}
         )
         return response
+    
+class RAGChain:
+    def __init__(self, prompt_template, model='gpt-4o'):
+        # 1. Chain Component 정의
+        prompt = ChatPromptTemplate.from_template(prompt_template)
+        llm = ChatOpenAI(model=model)
+        # 2. Chain 생성
+        self.chain = prompt | llm
+
+    def get_response(self, query, query_type, context):
+        response = self.chain.invoke({
+            'type': query_type,
+            'query': query,
+            'context': context
+        })
+        return response.content

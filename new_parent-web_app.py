@@ -1,5 +1,4 @@
 import streamlit as st
-from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 import openai
 
@@ -7,8 +6,8 @@ from data_loader.json_loader import JsonLoader
 from data_loader.datasaver import JsonSaver
 from crawler.korean_hospitals import SamsungHospital, AsanMedicalCenter, SeveranceHospital
 from preprocessor.structured_data import json_to_langchain_doclist
-from preprocessor.embedding import RetrieverWithOpenAiEmbeddings
-from model.langchain.chain import RagHistoryChain
+from model.embedding import FAISSBM25Retriever
+from model.langchain.chain import RAGChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
@@ -40,38 +39,39 @@ def update_references(bot_status, references):
     bot_status.update(label="정보를 업데이트 했습니다.", state="complete")
 
 @st.cache_resource
-def initialize_chain(_documents, openai_api_key):
+def create_retriever(_documents, OPENAI_API_KEY):
+    # Streamlit의 cache_resource를 쓰기 위해 함수화
+    # documents는 hash할 수 없어서 _를 붙여 표시
+    retriever = FAISSBM25Retriever(_documents, OPENAI_API_KEY, top_k=1)
+    return retriever
+
+def initialize_chain():
     print(">>> chain initializing")
-    # Embeddings
-    embedding = RetrieverWithOpenAiEmbeddings(_documents, openai_api_key=openai_api_key)
-    # Vector Store
-    retriever = embedding.multiquery_retriever
+    rag_prompt_template = """당신은 영유아를 키우는 초보 부모들에게 근거 있는 의료 지식을 제공하는 어시스턴트이다.
+초보 부모들이 궁금증을 해결하고 응급 상황에 대처할 수 있도록 돕는 것이 당신의 역할이다.
+초보 부모들의 입력은 QUERY로 전달되고, 입력의 종류는 QUERY TYPE으로 전달된다.
+QUERY TYPE에는 'symptom'과 'question'이 있고, 이에 따라 다른 종류의 QUERY가 전달된다.
+아래 가이드를 따라 QUERY에 대한 답변을 하시오. 이 때, 반드시 CONTEXT에 나와있는 문서를 참고하여 답하시오. 
+관련 내용을 CONTEXT에서 찾을 수 없다면, '근거자료에서 관련 내용을 찾을 수 없다'고 하시오.
+markdown 형식으로 답변하시오.
 
-    prompt = PromptTemplate.from_template(
-                """
-                You are a professional with medical knowledge about infants and toddlers, based on the context below.
-                You must always use the information from the provided context to guide new parents.
-                When answering questions, always refer to the information provided in the context below.
-                Your answer should be based on this context and should not include any information that contradicts it.
-                If you do not find the necessary information in the context, ask the user for more details or clarification.
-                You should answer in Korean.
+<<< QUERY TYPE 가이드 >>>
+1. QUERY TYPE이 'symptom'이라면, QUERY에는 아이의 나이와 아이가 겪고 있는 증상 정보가 전달된다. 
+1-1. CONTEXT에 근거해서 해당 증상으로 의심할 수 있는 두 가지 질환들을 해당 질환들에 대한 간단한 설명과 함께 안내하시오.
+1-2. CONTEXT에 해당 질환의 치료 방법이나 응급 처치 방법이 있다면 자세히 안내하시오.
+2. QUERY TYPE이 'question'이라면, QUERY에는 영유아의 의료건강 정보에 대한 질문이 전달된다.
+2-1. CONTEXT에 근거하여 해당 질문에 자세히 답하시오.
 
-                If a user inputs certain symptoms, identify possible illnesses related to those symptoms, 
-                provide a description of the illnesses, and explain their causes and treatments, 
-                including first aid, based on the following context.
-                
-                # Previous Chat History:
-                {chat_history}
-                
-                # Question:
-                {question}
+<<< QUERY TYPE >>>
+{type}
 
-                #Context: 
-                {context}
+<<< QUERY >>>
+{query}
 
-                #Answer:"""
-            )
-    chain = RagHistoryChain(prompt, retriever, openai_api_key=openai_api_key, model_name='gpt-4o')
+<<< CONTEXT >>>
+{context}
+"""
+    chain = RAGChain(rag_prompt_template)
     return chain
 
 def get_child_info(name):
@@ -82,70 +82,29 @@ def get_child_info(name):
                 return record
     return None
 
-def create_query_with_symptoms(birth, symptom, description, history):
-    # 챗에서 사용자의 말풍선으로 표시될 사용자의 증상 입력 내용
-    symptom_input = f"""
-    - 아이의 만 나이: {datetime.now().year - birth.year}세
-    - 증상: {symptom}
-    - 증상에 대한 설명: {description}
-    """
-
-    # 실제 모델에게 전달될, 과거 증상 내역을 포함한 사용자의 증상 입력 내용
-    query = f"""
-    I observe the symptom below from my child.
-    - age: {datetime.now().year-birth.year}세
-    - observed symptoms: {symptom}
-    - descriptions on observed symptoms: {description}
-
-    Here is the past symptoms that I recorded before.
-    - recorded past symptoms of this child: {history}
-
-    Please tell me what I can do immediately.
-    Visiting a hospital is not an option right now.
-    If you made judgement based on the recorded past symptoms, tell me that you did so.
-
-    You must always use the information from the provided context to guide new parents.
-    When answering questions, always refer to the information provided in the context below.
-    Your answer should be based on this context and should not include any information that contradicts it.
-    If you do not find the necessary information in the context, ask the user for more details or clarification.
-
-    Answer in the following format (fill in the [] with your answer):
-    말씀하신 증상으로는 **[conditions available]**을 의심해볼 수 있습니다.
-    [explanations about the condition]
-    [reasons why the condition occurs]
-    * 응급처치: 
-    [Immediate first aid the user can perform without going to the hospital referred from the provided context]
-    * 방문할 병원:
-    [type of hospital the user should visit with his or her child]
-    """
-    return symptom_input, query
-
-def generate_chat(bot_status, query, child_name, query_to_show=None):
-    if not query_to_show:
-        # 증상입력이 아닌 chat_input을 통한 사용자 입력의 경우 입력 내용을 그대로 표시
-        query_to_show = query
+def generate_chat(retriever, query, query_type, child_name, bot_status):
     bot_status.update(label='loading...', state='running')
-    response = st.session_state['chain'].get_response(query, session_id=child_name)
+    # query 관련 문서 찾아 context 만들기
+    retrieved_docs = retriever.search_docs(query)
+    context = ""
+    for doc in retrieved_docs:
+        context += doc.page_content
+        context += '\n\n'
+    # context와 query를 전달해서 query에 대한 모델 답변 받기
+    response = st.session_state['chain'].get_response(query, query_type, context)
     # 사용자 입력과 응답 내용을 세션기록에 추가
-    st.session_state['past'].append(query_to_show)
+    st.session_state['query'].append({'query': query, 'type': query_type})
     st.session_state['generated'].append(response)
     bot_status.update(label='ready', state='complete')
 
 @st.dialog("증상 입력하기")
-def submit_symptoms(child_name, birth_date, history, bot_status):
+def submit_symptoms(child_name, birth_date, bot_status, retriever):
     symptom = st.text_input("아이의 증상을 입력하세요.")
-    description = st.text_area("증상을 설명해주세요.")
 
     if st.button("증상 저장 후 챗봇에게 물어보기"):
-        save_symptom_to_db(child_name, symptom, description)
-        symptom_input, query = create_query_with_symptoms(birth_date,
-                                                        symptom,
-                                                        description,
-                                                        history)
-        generate_chat(bot_status,
-                        query,
-                        child_name,
-                        query_to_show=symptom_input)
+        save_symptom_to_db(child_name, symptom)
+        symptom_query = f"""만 {datetime.now().year - birth_date.year}세의 증상: {symptom}"""
+        generate_chat(retriever, symptom_query, 'symptom', child_name, bot_status)
         st.session_state['submitted_symptom'] = True
         st.rerun()
 
@@ -160,7 +119,7 @@ def question_update_info():
     if st.button("수정"):
         st.rerun()
 
-@st.dialog("아이의 정보를 입력해주세요.")
+@st.dialog("아이의 정보를 입력해주세요.") 
 def question_child_info():
     st.markdown("<span style='font-weight:bold;'>아이의 이름을 입력하세요.</span>", unsafe_allow_html=True)
     child_name = st.text_input("동명이인 등록 불가")
@@ -252,7 +211,7 @@ def main():
     st.sidebar.write('---')
     option = st.sidebar.selectbox('참고 자료', ('기존 자료 사용', '업데이트'))
     if option == '업데이트':
-        st.cache_resource.clear()   # 캐싱된 기존 체인 삭제
+        st.cache_resource.clear()   # 캐싱된 기존 retriever 삭제
         update_references(bot_status, references)
     st.sidebar.write('---')
     # 세션기록 삭제
@@ -303,15 +262,18 @@ def main():
         json_data = JsonLoader(path).load()
         documents += json_to_langchain_doclist(json_data)
 
+    # Documents Retriever 인스턴스 생성 ---------------------------------
+    retriever = create_retriever(documents, api_key) # st.cache_resource 쓰기 위해 함수화
+
     # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
     if 'chain' not in st.session_state:
-        st.session_state['chain'] = initialize_chain(documents, api_key)
+        st.session_state['chain'] = initialize_chain()
     bot_status.update(label="ready", state='complete')
 
     # 사용자 질문 세션상태 초기화
-    if 'past' not in st.session_state:
-        st.session_state['past'] = []
+    if 'query' not in st.session_state:
+        st.session_state['query'] = []
 
     # 질문에 대한 응답 세션상태 초기화
     if 'generated' not in st.session_state:
@@ -345,26 +307,26 @@ def main():
         if child_in_db :
             his_her_history = fetch_symptom_history(child_in_db[1])
             for record in his_her_history:
-                recorded_at = record[4]
+                recorded_at = record[3]
                 recorded_symptom = record[2]
                 st.write(f"[ {recorded_at} ] {recorded_symptom}")
 
     if st.button("증상 입력하기"):
-        submit_symptoms(child_name, birth_date, his_her_history, bot_status)
+        submit_symptoms(child_name, birth_date, bot_status, retriever)
 
     # 증상이 입력된 후에 chat_input 띄우기
     with chat_input_container:
         if st.session_state['submitted_symptom']:
             user_input = st.chat_input("궁금한 점을 입력하세요.")
             if user_input:
-                generate_chat(bot_status, user_input, child_name)
+                generate_chat(retriever, user_input, 'question', child_name, bot_status)
 
     # 채팅 히스토리 표시
     with chat_container:
         if st.session_state['generated']:
             with response_container:
                 for i in range(len(st.session_state['generated'])):
-                    st.chat_message("user").write(st.session_state['past'][i])
+                    st.chat_message("user").write(st.session_state['query'][i]['query'])
                     st.chat_message("ai").write(st.session_state['generated'][i])
 
 if __name__ == '__main__':
