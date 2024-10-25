@@ -91,7 +91,7 @@ def generate_chat(retriever, query, query_type, child_name, bot_status):
         context += doc.page_content
         context += '\n\n'
     # context와 query를 전달해서 query에 대한 모델 답변 받기
-    response = st.session_state['chain'].get_response(query, query_type, context)
+    response = st.session_state['chain'].get_response(query, query_type, context, child_name)
     # 사용자 입력과 응답 내용을 세션기록에 추가
     st.session_state['query'].append({'query': query, 'type': query_type})
     st.session_state['generated'].append(response)
