@@ -1,7 +1,7 @@
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
     
 class RAGChain:
@@ -10,20 +10,28 @@ class RAGChain:
         # 1. Chain Component 정의
         prompt = ChatPromptTemplate.from_messages([
             ("system", prompt_template),
-            ("system", "chat_history를 참고해서 답하시오"),
-            MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{query}")
         ])
         llm = ChatOpenAI(model=model)
         # 2. Chain 생성
         self.chain = prompt | llm
         self.session_storage = {}   # 대화기록을 저장, 관리할 딕셔너리
-
-    def get_session_history(self, session_ids: str) -> BaseChatMessageHistory:
-        print(f">>> session_ids for chat history: {session_ids}")
-        if session_ids not in self.session_storage:
-            self.session_storage[session_ids] = ChatMessageHistory()
-        return self.session_storage[session_ids]    # 해당 세션ID의 세션 기록(ChatMessageHistory객체) 반환
+    
+    def get_session_history(self, session_id: str) -> InMemoryChatMessageHistory:
+        if session_id not in self.session_storage:
+            self.session_storage[session_id] = InMemoryChatMessageHistory()
+            return self.session_storage[session_id ]
+        
+        # memory 객체로 불러오기
+        memory = ConversationBufferMemory(
+            chat_memory=self.session_storage[session_id],
+            return_messages=True,
+        )
+        assert len(memory.memory_variables) == 1    # 메모리에 저장된 변수가 하나인지 확인
+        key = memory.memory_variables[0]
+        messages = memory.load_memory_variables({})[key]
+        self.session_storage[session_id] = InMemoryChatMessageHistory(messages=messages)
+        return self.session_storage[session_id]
 
     def get_response(self, query, query_type, context, session_ids):
         with_msg_history = RunnableWithMessageHistory(
