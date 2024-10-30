@@ -45,7 +45,7 @@ def create_retriever(_documents, OPENAI_API_KEY):
     retriever = FAISSBM25Retriever(_documents, OPENAI_API_KEY, top_k=1)
     return retriever
 
-def initialize_chain():
+def initialize_chain(openai_api_key):
     print(">>> chain initializing")
     rag_prompt_template = """당신은 영유아를 키우는 초보 부모들에게 근거 있는 의료 지식을 제공하는 어시스턴트이다.
 초보 부모들이 궁금증을 해결하고 응급 상황에 대처할 수 있도록 돕는 것이 당신의 역할이다.
@@ -75,7 +75,7 @@ markdown 형식으로 답변하시오.
 <<< CONTEXT >>>
 {context}
 """
-    chain = RAGChain(rag_prompt_template)
+    chain = RAGChain(rag_prompt_template, openai_api_key)
     return chain
 
 def get_child_info(name):
@@ -272,7 +272,7 @@ def main():
     # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
     if 'chain' not in st.session_state:
-        st.session_state['chain'] = initialize_chain()
+        st.session_state['chain'] = initialize_chain(api_key)
     bot_status.update(label="ready", state='complete')
 
     # 사용자 질문 세션상태 초기화

@@ -5,14 +5,14 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
     
 class RAGChain:
-    def __init__(self, prompt_template, model='gpt-4o'):
+    def __init__(self, prompt_template, openai_api_key, model='gpt-4o'):
         # prompt_template에 {type}, {query}, {context}
         # 1. Chain Component 정의
         prompt = ChatPromptTemplate.from_messages([
             ("system", prompt_template),
             ("human", "{query}")
         ])
-        llm = ChatOpenAI(model=model)
+        llm = ChatOpenAI(model=model, api_key=openai_api_key)
         # 2. Chain 생성
         self.chain = prompt | llm
         self.session_storage = {}   # 대화기록을 저장, 관리할 딕셔너리
