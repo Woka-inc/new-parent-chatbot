@@ -1,12 +1,15 @@
 import streamlit as st
 from dotenv import load_dotenv
 import openai
+from PIL import Image
 
 from data_loader.json_loader import JsonLoader
 from data_loader.datasaver import JsonSaver
 from crawler.korean_hospitals import SamsungHospital, AsanMedicalCenter, SeveranceHospital
 from preprocessor.structured_data import json_to_langchain_doclist
+from preprocessor.image import get_resized_img, encode_bytesio_to_base64
 from model.embedding import FAISSBM25Retriever
+from model.model_utils import get_img_description
 from model.langchain.chain import RAGChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
@@ -86,8 +89,17 @@ def get_child_info(name):
                 return record
     return None
 
-def generate_chat(retriever, query, query_type, child_name, bot_status):
+def generate_chat(retriever, uploaded_img, query, query_type, child_name, bot_status):
     bot_status.update(label='loading...', state='running')
+    if uploaded_img is not None:
+        resized_img = get_resized_img(uploaded_img)
+        encoded_img = encode_bytesio_to_base64(resized_img)
+        img_description = get_img_description(encoded_img, st.session_state['OPENAI_API_KEY'])
+        query += f"\n\n사용자가 입력한 이미지에서 관찰할 수 있는 아이의 상태는 다음과 같습니다: {img_description}"
+        st.session_state['query_img'].append(resized_img)
+    else:
+        st.session_state['query_img'].append(None)
+
     # query 관련 문서 찾아 context 만들기
     retrieved_docs = retriever.search_docs(query)
     context = ""
@@ -104,11 +116,12 @@ def generate_chat(retriever, query, query_type, child_name, bot_status):
 @st.dialog("증상 입력하기")
 def submit_symptoms(child_name, birth_date, bot_status, retriever):
     symptom = st.text_input("아이의 증상을 입력하세요.")
+    uploaded_img = st.file_uploader("증상 사진 업로드(선택)", type=['png', 'jpg', 'jpeg'])
 
     if st.button("증상 저장 후 챗봇에게 물어보기"):
         save_symptom_to_db(child_name, symptom)
         symptom_query = f"""만 {datetime.now().year - birth_date.year}세의 증상: {symptom}"""
-        generate_chat(retriever, symptom_query, 'symptom', child_name, bot_status)
+        generate_chat(retriever, uploaded_img, symptom_query, 'symptom', child_name, bot_status)
         st.session_state['submitted_symptom'] = True
         st.rerun()
 
@@ -279,6 +292,9 @@ def main():
     if 'query' not in st.session_state:
         st.session_state['query'] = []
 
+    if 'query_img' not in st.session_state:
+        st.session_state['query_img'] = []
+
     # 질문에 대한 응답 세션상태 초기화
     if 'generated' not in st.session_state:
         st.session_state['generated'] = []
@@ -331,6 +347,9 @@ def main():
             with response_container:
                 for i in range(len(st.session_state['generated'])):
                     st.chat_message("user").write(st.session_state['query'][i]['query'])
+                    if st.session_state['query_img'][i] is not None:
+                        img = Image.open(st.session_state['query_img'][i])
+                        st.chat_message("user").image(img)
                     st.chat_message("ai").write(st.session_state['generated'][i])
 
 if __name__ == '__main__':
