@@ -78,8 +78,7 @@ markdown 형식으로 답변하시오.
 <<< CONTEXT >>>
 {context}
 """
-    chain = RAGChain(rag_prompt_template, openai_api_key)
-    return chain
+    st.session_state['chain'] = RAGChain(rag_prompt_template, openai_api_key)
 
 def get_child_info(name):
     all_children = fetch_all_children()
@@ -285,7 +284,7 @@ def main():
     # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
     if 'chain' not in st.session_state:
-        st.session_state['chain'] = initialize_chain(api_key)
+        initialize_chain(api_key)
     bot_status.update(label="ready", state='complete')
 
     # 사용자 질문 세션상태 초기화
