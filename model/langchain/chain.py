@@ -49,3 +49,34 @@ class RAGChain:
             config={"configurable": {"session_id": session_ids}}
         )
         return response.content
+    
+class ImageDescriptionChain:
+    # 기존 get_img_description과 동장방식은 같으나, 사용자 입력 텍스트를 함께 전달해 이미지 설명 요청 프롬프트를 보강
+    def __init__(self, openai_api_key, model='gpt-4o'):
+        prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "다음 그림은 영유아의 증상 혹은 상태를 촬영한 사진이다. 다음 사진에서 관찰할 수 있는 아이의 상태를 묘사하라. 상태에 대해 진단해서는 안된다."
+            ),
+            (
+                "user",
+                "{user_query}"
+            ),
+            (
+                "user",
+                [{
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/jpeg;base64,{image_data}"},
+                }],
+            ),
+        ])
+
+        model = ChatOpenAI(model=model, api_key=openai_api_key)
+        self.chain = prompt | model
+
+    def get_description(self, query, encoded_img):
+        response = self.chain.invoke({
+            "user_query": query, 
+            "image_data": encoded_img
+        })
+        return response.content

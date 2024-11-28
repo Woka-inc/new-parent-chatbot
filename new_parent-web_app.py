@@ -9,8 +9,7 @@ from crawler.korean_hospitals import SamsungHospital, AsanMedicalCenter, Severan
 from preprocessor.structured_data import json_to_langchain_doclist
 from preprocessor.image import get_resized_img, encode_bytesio_to_base64
 from model.embedding import FAISSBM25Retriever
-from model.model_utils import get_img_description
-from model.langchain.chain import RAGChain
+from model.langchain.chain import RAGChain, ImageDescriptionChain
 from database.operations import save_symptom_to_db, fetch_symptom_history, add_child_to_db, fetch_all_children, delete_child, update_child
 
 import os
@@ -78,7 +77,8 @@ markdown 형식으로 답변하시오.
 <<< CONTEXT >>>
 {context}
 """
-    st.session_state['chain'] = RAGChain(rag_prompt_template, openai_api_key)
+    st.session_state['rag_chain'] = RAGChain(rag_prompt_template, openai_api_key)
+    st.session_state['img_description_chain'] = ImageDescriptionChain(openai_api_key)
 
 def get_child_info(name):
     all_children = fetch_all_children()
@@ -90,25 +90,26 @@ def get_child_info(name):
 
 def generate_chat(retriever, uploaded_img, query, query_type, child_name, bot_status):
     bot_status.update(label='loading...', state='running')
+    retrieval_query = query
     if uploaded_img is not None:
         resized_img = get_resized_img(uploaded_img)
         encoded_img = encode_bytesio_to_base64(resized_img)
-        img_description = get_img_description(encoded_img, st.session_state['OPENAI_API_KEY'])
-        query += f"\n\n사용자가 입력한 이미지에서 관찰할 수 있는 아이의 상태는 다음과 같습니다: {img_description}"
+        img_description = st.session_state['img_description_chain'].get_description(query, encoded_img)
+        retrieval_query += f"\n\n사용자가 입력한 이미지에서 관찰할 수 있는 아이의 상태는 다음과 같습니다: {img_description}"
         st.session_state['query_img'].append(resized_img)
     else:
         st.session_state['query_img'].append(None)
 
     # query 관련 문서 찾아 context 만들기
-    retrieved_docs = retriever.search_docs(query)
+    retrieved_docs = retriever.search_docs(retrieval_query)
     context = ""
     for doc in retrieved_docs:
         context += doc.page_content
         context += '\n\n'
     # context와 query를 전달해서 query에 대한 모델 답변 받기
-    response = st.session_state['chain'].get_response(query, query_type, context, child_name)
+    response = st.session_state['rag_chain'].get_response(retrieval_query, query_type, context, child_name)
     # 사용자 입력과 응답 내용을 세션기록에 추가
-    st.session_state['query'].append({'query': query, 'type': query_type})
+    st.session_state['query'].append({'query': retrieval_query, 'type': query_type})
     st.session_state['generated'].append(response)
     bot_status.update(label='ready', state='complete')
 
@@ -283,7 +284,7 @@ def main():
 
     # chain 생성 후 세션에 저장해 사용 --------------------------------------
     bot_status.update(label="loading...", state='running')
-    if 'chain' not in st.session_state:
+    if 'rag_chain' not in st.session_state:
         initialize_chain(api_key)
     bot_status.update(label="ready", state='complete')
 
